@@ -183,6 +183,18 @@ export class Application {
       throw new Error('Your \`GHE_HOST\` environment variable should not begin with https:// or http://')
     }
 
+    const request = {
+      agent: undefined
+    }
+
+    const proxy = process.env.https_proxy || process.env.HTTPS_PROXY
+    const noProxy = process.env.no_proxy || process.env.NO_PROXY
+    if ((proxy && !noProxy)
+      || (proxy && noProxy && process.env.GHE_HOST && !noProxy.includes(process.env.GHE_HOST))) {
+      const HttpsProxyAgent = require('https-proxy-agent')
+      request.agent = HttpsProxyAgent(proxy)
+    }
+
     // if installation ID passed, instantiate and authenticate Octokit, then cache the instance
     // so that it can be used across received webhook events.
     if (id) {
@@ -192,7 +204,8 @@ export class Application {
           return `token ${accessToken}`
         },
         baseUrl: process.env.GHE_HOST && `https://${process.env.GHE_HOST}/api/v3`,
-        logger: log.child({ name: 'github', installation: String(id) })
+        logger: log.child({ name: 'github', installation: String(id) }),
+        request
       }
 
       if (this.throttleOptions) {
@@ -214,7 +227,8 @@ export class Application {
     const github = GitHubAPI({
       auth: `Bearer ${token}`,
       baseUrl: process.env.GHE_HOST && `https://${process.env.GHE_HOST}/api/v3`,
-      logger: log.child({ name: 'github' })
+      logger: log.child({ name: 'github' }),
+      request
     })
 
     return github

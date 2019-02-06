@@ -247,6 +247,75 @@ describe('Application', () => {
     })
   })
 
+  describe('HTTP proxy support', () => {
+    const OLD_ENV = process.env
+
+    beforeEach(() => {
+      jest.resetModules()
+      process.env = { ...OLD_ENV }
+    })
+
+    afterEach(() => {
+      process.env = OLD_ENV
+    })
+
+    it('works without HTTP proxy', async () => {
+      process.env.GHE_HOST = 'notreallygithub.com'
+      process.env.https_proxy = ''
+      process.env.no_proxy = ''
+
+      const appWithoutHttpProxy = new Application({ githubToken: 'bar' } as any)
+
+      Object.defineProperty(GitHubApiModule, 'GitHubAPI', {
+        value (options: any) {
+          expect(options.request.agent).toBeUndefined()
+          return 'github mock'
+        }
+      })
+
+      const result = await appWithoutHttpProxy.auth()
+      expect(result).toBe('github mock')
+    })
+
+    it('works behind HTTP proxy', async () => {
+      process.env.GHE_HOST = 'notreallygithub.com'
+      process.env.https_proxy = 'http://my_proxy:4321'
+      process.env.no_proxy = ''
+
+      const appBehindHttpProxy = new Application({ githubToken: 'bar' } as any)
+
+      Object.defineProperty(GitHubApiModule, 'GitHubAPI', {
+        value (options: any) {
+          expect(options.request.agent.proxy).toBeDefined()
+          expect(options.request.agent.proxy.host).toBe('my_proxy')
+          expect(options.request.agent.proxy.port).toBe(4321)
+          return 'github mock'
+        }
+      })
+
+      const result = await appBehindHttpProxy.auth()
+      expect(result).toBe('github mock')
+    })
+
+    it('works behind HTTP proxy respecting no_proxy', async () => {
+      process.env.GHE_HOST = 'notreallygithub.com'
+      process.env.https_proxy = 'http://my_proxy:4321'
+      process.env.no_proxy = 'localhost,127.0.0.1,notreallygithub.com,myhost.local'
+
+      const appBehindHttpProxy = new Application({ githubToken: 'bar' } as any)
+
+      Object.defineProperty(GitHubApiModule, 'GitHubAPI', {
+        value (options: any) {
+          expect(options.request.agent).toBeUndefined()
+          return 'github mock'
+        }
+      })
+
+      const result = await appBehindHttpProxy.auth()
+      expect(result).toBe('github mock')
+    })
+  })
+
   describe('error handling', () => {
     let error: any
 
